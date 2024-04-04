@@ -1,0 +1,95 @@
+from airflow import DAG
+from airflow.operators.python_operator import PythonOperator, ShortCircuitOperator
+from airflow.utils.dates import days_ago
+import datetime
+
+# Define the default arguments for the DAG
+default_args = {
+    'owner': 'airflow',
+    'depends_on_past': False,
+    'start_date': days_ago(1),
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': datetime.timedelta(minutes=5),
+}
+
+# Define the DAG
+dag = DAG(
+    'example_dag',
+    default_args=default_args,
+    description='A simple DAG with conditional execution',
+    schedule_interval=datetime.timedelta(days=1),
+)
+
+# Task 1: Extract data
+def extract_data():
+    # Code to extract data goes here
+    print("Extracting data...")
+
+task_1 = PythonOperator(
+    task_id='extract_data',
+    python_callable=extract_data,
+    dag=dag,
+)
+
+# Task 2: Transform data
+def transform_data():
+    # Code to transform data goes here
+    print("Transforming data...")
+    # Simulating failure
+    raise Exception("Simulated failure")
+
+task_2 = PythonOperator(
+    task_id='transform_data',
+    python_callable=transform_data,
+    dag=dag,
+)
+
+# Task 3: Load data
+def load_data():
+    # Code to load data goes here
+    print("Loading data...")
+
+task_3 = PythonOperator(
+    task_id='load_data',
+    python_callable=load_data,
+    dag=dag,
+)
+
+# Task 4: Quality check
+def quality_check():
+    # Code for quality check goes here
+    print("Performing quality check...")
+
+task_4 = PythonOperator(
+    task_id='quality_check',
+    python_callable=quality_check,
+    dag=dag,
+)
+
+# Task 5: Cleanup
+def cleanup():
+    # Code for cleanup goes here
+    print("Performing cleanup...")
+
+task_5 = PythonOperator(
+    task_id='cleanup',
+    python_callable=cleanup,
+    dag=dag,
+)
+
+# Define task dependencies
+task_1 >> task_2 >> task_3
+
+# Task 4 is executed only if Task 2 fails
+short_circuit = ShortCircuitOperator(
+    task_id='check_task_2_status',
+    python_callable=lambda: True if task_2._get_task_instances(None, datetime.datetime.now())[-1].state == "failed" else False,
+    dag=dag,
+)
+
+task_2 >> short_circuit >> task_4
+
+# If Task 2 succeeds, Task 4 is skipped
+short_circuit >> task_5
